@@ -1687,6 +1687,22 @@ body.chat-mode:not(.in-conversation) { overflow-y: auto; height: auto; min-heigh
   50%      { box-shadow: 0 0 0 7px rgba(179,57,47,0); }
 }
 
+
+/* Voice, offered on the landing page too. Someone who cannot read the label
+   should not have to get through an upload screen before finding the mic. */
+.landing-voice { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; }
+.landing-voice .icon-btn { width: 32px; height: 32px; }
+.landing-voice .icon-btn.listening {
+  background: var(--red); color: #fff;
+  animation: micPulse 1.4s ease-in-out infinite;
+}
+#landingSpeak.on { color: var(--green); }
+#landingSpeak.on .wave { opacity: 1; }
+.landing-voice-note {
+  font-size: 12.5px; color: var(--text3); text-align: center;
+  margin: -18px 0 22px; line-height: 1.55;
+}
+
 /* Language picker on the landing page */
 .landing-lang {
   display: flex; align-items: center; justify-content: center; gap: 9px;

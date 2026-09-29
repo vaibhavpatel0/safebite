@@ -976,6 +976,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // -- Which credentials did the environment actually supply? ----------------
+  // Reports presence and length only, never a value. Without this, a missing
+  // key and a wrong key look identical from outside, and the provider errors
+  // ("Missing Authentication header", "unregistered callers") are easy to
+  // mistake for a bad key when they actually mean an empty one.
+  if (req.url === '/api/config-check' && req.method === 'GET') {
+    const report = [
+      ['GROQ_API_KEY', GROQ_API_KEY],
+      ['GEMINI_API_KEY', GEMINI_API_KEY_SERVER],
+      ['MISTRAL_API_KEY', MISTRAL_API_KEY],
+      ['OPENROUTER_API_KEY', OPENROUTER_API_KEY_GLOBAL],
+      ['VERIFICO_API_KEY', VERIFICO_API_KEY]
+    ].map(([name, val]) => ({
+      name,
+      set: !!val,
+      length: val ? val.length : 0,
+      looksTruncated: !!val && val.length < 20
+    }));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      configured: report.filter(r => r.set).length,
+      total: report.length,
+      keys: report,
+      hint: report.every(r => !r.set)
+        ? 'No keys reached the process. On Render: Environment tab, then redeploy.'
+        : null
+    }, null, 2));
+    return;
+  }
+
   // -- Can a given URL be shown inside an iframe? -----------------------------
   // The browser cannot answer this honestly: Chrome fires a normal `load`
   // event even when a site refuses to be framed, so client-side detection

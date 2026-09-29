@@ -23,6 +23,12 @@
     lastData: null        // most recent completed analysis
   };
 
+  // Interface language. Falls through to English if i18n.js is absent.
+  const T = k => (window.SafeByteI18N ? SafeByteI18N.t(k) : null);
+  const tx = (k, fallback) => T(k) || fallback;
+  // Rules engines speak English; the interface speaks whatever the user picked.
+  const lbl = en => (window.SafeByteI18N ? SafeByteI18N.label(en) : en);
+
   const $ = id => document.getElementById(id);
   const thread = () => $('thread');
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -42,8 +48,15 @@
     const row = document.createElement('div');
     row.className = 'msg msg-' + role + (cls ? ' ' + cls : '');
     row.innerHTML = role === 'agent'
-      ? `<span class="msg-mark" aria-hidden="true"></span><div class="msg-body">${html}</div>`
-      : `<div class="msg-body">${html}</div>`;
+      ? `<span class="msg-mark" aria-hidden="true"></span><div class="msg-body"></div>`
+      : `<div class="msg-body"></div>`;
+    const body = row.querySelector('.msg-body');
+    // The agent writes its own sentences, so they cannot all be dictionary
+    // keys. They go through the translator, which shows English at once and
+    // rewrites the bubble in place when the translation lands.
+    body.innerHTML = (role === 'agent' && window.SafeByteI18N)
+      ? SafeByteI18N.dynamic(body, html)
+      : html;
     thread().appendChild(row);
     scrollDown();
     return row;
@@ -53,8 +66,14 @@
     const row = bubble('agent', html);
     // Anything the agent says should be sayable. Questions especially: the
     // whole point of voice mode is that someone can be asked "can you see an
-    // MRP on the pack?" without having to read it.
-    try { if (window.SafeByteVoice) SafeByteVoice.speak(html); } catch (e) {}
+    // MRP on the pack?" without having to read it. Speak whatever is actually
+    // on screen, which may already be the translated wording.
+    try {
+      if (window.SafeByteVoice) {
+        const b = row.querySelector('.msg-body');
+        SafeByteVoice.speak(b ? b.innerHTML : html);
+      }
+    } catch (e) {}
     return row;
   };
   const youSaid = text => bubble('you', `<p>${esc(text)}</p>`);
@@ -185,7 +204,7 @@
       const shrunk = await downscaleImage(ev.target.result);
 
       if (!pendingShots.length) {
-        if (S.scans > 0) divider('New scan');
+        if (S.scans > 0) divider(tx('divider.newScan','New scan'));
         S.scans++;
         currentImages = [];
       }
@@ -212,15 +231,15 @@
 
   async function offerMoreShots() {
     const n = pendingShots.length;
-    composerEnabled(true, 'add another, or say go…');
+    composerEnabled(true, tx('ph.more','add another, or say go...'));
     await says(
       n === 1
         ? `Got it. If the pack has more to show, the back, the strip, the flap with the expiry, add those too and I will read them together. Otherwise I will start.`
         : `${n} photos so far. Add more, or tell me to go.`
     );
     chips([
-      { label: 'Analyse now', run: () => beginAnalysis() },
-      { label: 'Add another photo', tone: 'ghost', run: () => $('chatFileInput').click() }
+      { label: tx('chip.analyse','Analyse now'), run: () => beginAnalysis() },
+      { label: tx('chip.addPhoto','Add another photo'), tone: 'ghost', run: () => $('chatFileInput').click() }
     ]);
     S.phase = 'awaiting_go';
   }
@@ -255,17 +274,17 @@
     composerEnabled(false, 'SafeByte is looking at the photo…');
     chips(null);
 
-    const reading = work('Reading the label');
+    const reading = work(tx('step.reading','Reading the label'));
     let info;
     try {
       const raw = await callGeminiExtract();
       info = parseExtractedInfo(raw);
-      reading.done(lastProvider ? `Label read (${lastProvider})` : 'Label read');
+      reading.done(lastProvider ? `${tx('step.read','Label read')} (${lastProvider})` : tx('step.read','Label read'));
     } catch (err) {
-      reading.fail('I could not read that image');
+      reading.fail(tx('step.failRead','I could not read that image'));
       await says(`Something went wrong reading it: <em>${esc(err.message || 'unknown error')}</em><br><br>Try another photo, or check the terminal if this keeps happening.`);
       S.phase = 'idle';
-      composerEnabled(true, 'Send another photo…');
+      composerEnabled(true, tx('ph.another','Send another photo...'));
       return;
     }
 
@@ -277,7 +296,7 @@
 
     if (info.productKind === 'cosmetic') {
       S.phase = 'confirming_food';
-      composerEnabled(true, 'yes / no…');
+      composerEnabled(true, tx('ph.yesno','yes / no...'));
       await says(
         `This looks like a <strong>cosmetic</strong>, not food or medicine. I check food labels against FSSAI rules and medicine labels against the Drugs and Cosmetics Rules, cosmetics have their own requirements I do not cover yet.`
       );
@@ -294,15 +313,15 @@
     // --- Is this even food? -------------------------------------------------
     if (!a.isFood) {
       S.phase = 'confirming_food';
-      composerEnabled(true, 'yes / no…');
+      composerEnabled(true, tx('ph.yesno','yes / no...'));
       await says(
         `This does not look like a food package to me.` +
         (a.notFoodReason ? ` It looks like <strong>${esc(a.notFoodReason)}</strong>.` : '') +
         `<br><br>I check food labels against FSSAI and Legal Metrology rules, which would not mean anything here. Is it actually a packaged food or drink?`
       );
       chips([
-        { label: 'Yes, it is food', run: confirmFood },
-        { label: 'No, my mistake', tone: 'ghost', run: abandonScan }
+        { label: tx('chip.isFood','Yes, it is food'), run: confirmFood },
+        { label: tx('chip.notFood','No, my mistake'), tone: 'ghost', run: abandonScan }
       ]);
       return;
     }
@@ -316,8 +335,8 @@
         `A verdict from this photo would be guesswork, and flagging a violation that is not really there is worse than asking you to try again.`
       );
       chips([
-        { label: 'I will retake it', run: abandonScan },
-        { label: 'Continue anyway', tone: 'ghost', run: () => { S.info.packageConfidence = 'medium'; proceed(); } }
+        { label: tx('chip.retake','I will retake it'), run: abandonScan },
+        { label: tx('chip.continue','Continue anyway'), tone: 'ghost', run: () => { S.info.packageConfidence = 'medium'; proceed(); } }
       ]);
       return;
     }
@@ -360,7 +379,7 @@
       `${esc(S.current.question)}` +
       (S.current.why ? `<br><span class="msg-why">${esc(S.current.why)}</span>` : '')
     );
-    chips([{ label: 'Not printed on the pack', tone: 'ghost', run: () => handleAnswer('__ABSENT__') }]);
+    chips([{ label: tx('chip.notPrinted','Not printed on the pack'), tone: 'ghost', run: () => handleAnswer('__ABSENT__') }]);
     $('composerInput').focus();
   }
 
@@ -405,8 +424,8 @@
     if (/^(n|no|nope|nah|not)\b/.test(t)) return abandonScan();
     await says(`Sorry, just so I do not waste your time: is this a packaged food or drink? A yes or no is enough.`);
     chips([
-      { label: 'Yes, it is food', run: confirmFood },
-      { label: 'No, my mistake', tone: 'ghost', run: abandonScan }
+      { label: tx('chip.isFood','Yes, it is food'), run: confirmFood },
+      { label: tx('chip.notFood','No, my mistake'), tone: 'ghost', run: abandonScan }
     ]);
   }
 
@@ -421,7 +440,7 @@
     S.phase = 'idle';
     S.info = null;
     chips(null);
-    composerEnabled(true, 'Send another photo…');
+    composerEnabled(true, tx('ph.another','Send another photo...'));
     await says(`No problem. Send me the back of a food package whenever you are ready, the side with the ingredients and the FSSAI number is the useful one.`);
   }
 
@@ -444,7 +463,7 @@
       multi = await fssaiService.verifyAll(info.fssaiLicNos, info.manufacturer, info.manufacturerAddress);
       fssaiResult = multi.primaryResult;
       fssaiResult.multi = multi;
-      step.done(`${multi.count} licence${multi.count === 1 ? '' : 's'} checked, ${String(multi.overallResult || '').replace(/_/g, ' ').toLowerCase()}`);
+      step.done(`${tx('step.licChecked','Licence checked')}: ${multi.count} (${String(multi.overallResult || '').replace(/_/g, ' ').toLowerCase()})`);
     } catch (err) {
       step.fail('Could not reach the FoSCoS database');
       multi = { results: [], count: 0, overallResult: 'UNVERIFIED' };
@@ -473,14 +492,14 @@
     // Hand over to open conversation
     chatHistory = [];
     S.phase = 'chatting';
-    composerEnabled(true, 'Ask me anything about this product…');
+    composerEnabled(true, tx('ph.ask','Ask me anything about this product...'));
     await says(agentOpeningMessage(data));
     chips([
-      { label: 'Who can eat this?', run: () => routeAsChat('Who can safely eat this? What should I watch out for?') },
-      { label: 'Explain the verdict', run: () => routeAsChat('Explain the compliance verdict in plain language.') },
+      { label: tx('chip.whoEat','Who can eat this?'), run: () => routeAsChat('Who can safely eat this? What should I watch out for?') },
+      { label: tx('chip.explain','Explain the verdict'), run: () => routeAsChat('Explain the compliance verdict in plain language.') },
       compliance.failCount
-        ? { label: 'How do I report this?', tone: 'ghost', run: () => offerComplaint() }
-        : { label: 'How healthy is it?', tone: 'ghost', run: () => routeAsChat('How healthy is this, based on the actual ingredients and nutrition on this pack?') }
+        ? { label: tx('chip.report','How do I report this?'), tone: 'ghost', run: () => offerComplaint() }
+        : { label: tx('chip.healthy','How healthy is it?'), tone: 'ghost', run: () => routeAsChat('How healthy is this, based on the actual ingredients and nutrition on this pack?') }
     ]);
   }
 
@@ -488,12 +507,12 @@
   async function postVerdict(data) {
     const c = data.compliance;
     const verdict = c.overall === 'compliant'
-      ? { icon: '&#10003;', tone: 'ok', head: 'Compliant',
-          line: 'Every mandatory declaration is present and correctly formed.' }
+      ? { icon: '&#10003;', tone: 'ok', head: tx('verdict.ok','Compliant'),
+          line: tx('verdict.okLine','Every mandatory declaration is present and correctly formed.') }
       : c.overall === 'non-compliant'
-        ? { icon: '&times;', tone: 'bad', head: `${c.failCount} violation${c.failCount === 1 ? '' : 's'}`,
-            line: 'This pack does not meet FSSAI / Legal Metrology requirements.' }
-        : { icon: '!', tone: 'warn', head: 'Needs review',
+        ? { icon: '&times;', tone: 'bad', head: `${c.failCount} ${tx('verdict.bad','violations')}`,
+            line: tx('verdict.badLine','This pack does not meet FSSAI / Legal Metrology requirements.') }
+        : { icon: '!', tone: 'warn', head: tx('verdict.warn','Needs review'),
             line: `${c.warnCount} thing${c.warnCount === 1 ? '' : 's'} a human should look at.` };
 
     // The engine still renders its full report into the hidden container so
@@ -535,9 +554,9 @@
   /** Two or three words. The long version lives behind the tap. */
   function shortNote(chk) {
     const d = (chk.details || '').trim();
-    if (chk.status === 'fail') return 'missing';
-    if (chk.status === 'warn') return /misleading|suspicious/i.test(d) ? 'claims to check' : 'needs a look';
-    if (!d || /^present$/i.test(d)) return 'present';
+    if (chk.status === 'fail') return tx('note.missing','missing');
+    if (chk.status === 'warn') return tx('note.review','needs a look');
+    if (!d || /^present$/i.test(d)) return tx('note.present','present');
     if (/^\d+ licences/i.test(d)) return d.split('(')[0].trim();
     const clean = d.replace(/\s+/g, ' ');
     return clean.length > 30 ? clean.slice(0, 28).trim() + '…' : clean;
@@ -556,7 +575,7 @@
       <button class="check-row check-${chk.status}" onclick="deepDive(${i})">
         <span class="check-mark">${chk.status === 'pass' ? '&#10003;' : chk.status === 'warn' ? '!' : '&times;'}</span>
         <span class="check-text">
-          <span class="check-label">${esc(chk.label)}</span>
+          <span class="check-label">${esc(lbl(chk.label))}</span>
           <span class="check-note">${esc(shortNote(chk))}</span>
         </span>
         <span class="check-chev">&rsaquo;</span>
@@ -592,7 +611,7 @@ Keep it under 200 words. No preamble, no restating the question.`;
     try {
       const reply = await callGeminiChat(q + (window.SafeByteVoice ? SafeByteVoice.promptSuffix() : ''));
       dots.remove();
-      say(`<div class="deep-head">${esc(chk.label)}</div>` + formatReply(reply));
+      say(`<div class="deep-head">${esc(lbl(chk.label))}</div>` + formatReply(reply));
     } catch (err) {
       dots.remove();
       say(`<em>Could not fetch that just now, ${esc(err.message || 'providers busy')}.</em>`);
@@ -611,7 +630,7 @@ Keep it under 200 words. No preamble, no restating the question.`;
     const envWord = { good: 'recyclable', fair: 'partly recyclable', poor: 'not recyclable', unknown: 'unknown' }[p.env];
 
     await says(
-      `Now the packaging itself, the part almost nobody reads.` +
+      tx('pack.intro','Now the packaging itself, the part almost nobody reads.') +
       (p.printed ? ` This pack is marked <code>${esc(p.printed)}</code>${p.code ? ` (resin code ${esc(p.code)})` : ''}.` : '')
     );
 
@@ -620,12 +639,12 @@ Keep it under 200 words. No preamble, no restating the question.`;
         <div class="pack-name">${esc(p.known ? p.name : 'No material marking found')}</div>
         <div class="pack-verdict">${esc(p.verdict)}</div>
         <div class="pack-grid">
-          <div><span>Food contact</span><strong class="pack-${tone}-t">${
+          <div><span>${esc(tx('pack.foodContact','Food contact'))}</span><strong class="pack-${tone}-t">${
             { yes: 'Safe', depends: 'Safe for the food', caution: 'Questionable', unknown: 'Unknown' }[p.foodSafe] || 'Unknown'
           }</strong></div>
-          <div><span>After you finish it</span><strong>${esc(envWord)}</strong></div>
+          <div><span>${esc(tx('pack.after','After you finish it'))}</span><strong>${esc(envWord)}</strong></div>
         </div>
-        <button class="verdict-more" onclick="packDeepDive()">Why does this matter?</button>
+        <button class="verdict-more" onclick="packDeepDive()">${esc(tx('pack.why','Why does this matter?'))}</button>
       </div>`);
     await sleep(320);
   }
@@ -655,7 +674,7 @@ Keep it under 200 words. No preamble, no restating the question.`;
       return;
     }
 
-    const step = work('Reading through the ingredients');
+    const step = work(tx('step.ingredients','Reading through the ingredients'));
     const q = `Analyse the ingredients of this specific product for an ordinary Indian shopper.
 
 INGREDIENTS AS PRINTED: ${info.ingredients}
@@ -676,7 +695,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
 
     try {
       const reply = await callGeminiChat(q + (window.SafeByteVoice ? SafeByteVoice.promptSuffix() : ''));
-      step.done('Ingredients analysed');
+      step.done(tx('step.ingredientsDone','Ingredients analysed'));
       say(`<div class="deep-head">What is inside</div>` + formatReply(reply));
     } catch (err) {
       step.fail('Could not analyse the ingredients just now');
@@ -691,34 +710,38 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     const fails = c.checks.filter(x => x.status === 'fail');
     const warns = c.checks.filter(x => x.status === 'warn');
 
-    await says(`So, pulling it together.`);
+    await says(tx('sum.pulling','So, pulling it together.'));
 
     const rows = [];
-    fails.forEach(f => rows.push([f.label, 'Missing', 'bad']));
-    warns.forEach(w => rows.push([w.label, 'Needs review', 'warn']));
-    if (!rows.length) rows.push(['All 12 mandatory declarations', 'Present', 'ok']);
+    fails.forEach(f => rows.push([lbl(f.label), tx('sum.missing','Missing'), 'bad']));
+    warns.forEach(w => rows.push([lbl(w.label), tx('sum.review','Needs review'), 'warn']));
+    if (!rows.length) rows.push([
+      tx('sum.allPresent','All 12 mandatory declarations'),
+      tx('sum.present','Present'), 'ok']);
 
     rows.push([
-      'FSSAI licence',
-      data.fssaiResult && data.fssaiResult.isGovtApproved ? 'Verified with government'
-        : data.fssaiResult && data.fssaiResult.overallResult === 'VERIFIED_MISMATCH' ? 'Registered to another company'
-        : 'Not verified',
+      tx('sum.fssaiLic','FSSAI licence'),
+      data.fssaiResult && data.fssaiResult.isGovtApproved
+        ? tx('sum.verified','Verified with government')
+        : data.fssaiResult && data.fssaiResult.overallResult === 'VERIFIED_MISMATCH'
+          ? tx('sum.otherCompany','Registered to another company')
+          : tx('sum.notVerified','Not verified'),
       data.fssaiResult && data.fssaiResult.isGovtApproved ? 'ok'
         : data.fssaiResult && data.fssaiResult.overallResult === 'VERIFIED_MISMATCH' ? 'bad' : 'warn'
     ]);
 
     rows.push([
-      'Packaging',
-      p.known ? (p.env === 'poor' ? 'Safe for food, not recyclable'
-              : p.env === 'good' ? 'Safe for food, recyclable'
-              : 'Safe for food, hard to recycle')
-              : 'No material marking',
+      tx('sum.packaging','Packaging'),
+      p.known ? (p.env === 'poor' ? tx('sum.safeNotRecycl','Safe for food, not recyclable')
+              : p.env === 'good' ? tx('sum.safeRecycl','Safe for food, recyclable')
+              : tx('sum.safeHard','Safe for food, hard to recycle'))
+              : tx('sum.noMarking','No material marking'),
       p.env === 'good' ? 'ok' : 'warn'
     ]);
 
     const table = `
       <table class="sum-table">
-        <thead><tr><th>What I checked</th><th>Where it stands</th></tr></thead>
+        <thead><tr><th>${esc(tx('sum.what','What I checked'))}</th><th>${esc(tx('sum.where','Where it stands'))}</th></tr></thead>
         <tbody>
           ${rows.map(([a, b, t]) => `
             <tr><td>${esc(a)}</td><td><span class="sum-pill sum-${t}">${esc(b)}</span></td></tr>`).join('')}
@@ -726,21 +749,22 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
       </table>`;
 
     const headline = c.failCount
-      ? `<strong>${c.failCount} mandatory declaration${c.failCount === 1 ? '' : 's'} missing.</strong> That is a breach of the Legal Metrology (Packaged Commodities) Rules, 2011, and you can report it.`
+      ? `<strong>${c.failCount} ${esc(tx('close.missing','mandatory declarations missing.'))}</strong> ` +
+        esc(tx('close.breach','That is a breach of the Legal Metrology (Packaged Commodities) Rules, 2011, and you can report it.'))
       : c.warnCount
-        ? `<strong>Nothing illegal, but ${c.warnCount} item${c.warnCount === 1 ? '' : 's'} worth a second look.</strong>`
-        : `<strong>This label is in order.</strong> Every mandatory declaration is present and the licence checks out.`;
+        ? `<strong>${esc(tx('close.nothingIllegal','Nothing illegal, but some items are worth a second look.'))}</strong>`
+        : `<strong>${esc(tx('close.inOrder','This label is in order. Every mandatory declaration is present and the licence checks out.'))}</strong>`;
 
     say(headline + table);
     await sleep(300);
 
     await says(
-      `Everything above, on a single page you can scroll, print or keep open beside the pack:` +
+      esc(tx('link.onePage','Everything above, on a single page you can scroll, print or keep open beside the pack:')) +
       `<div class="link-card">` +
         `<a class="link-go" href="report.html" target="_blank" rel="noopener">` +
           `` +
-          `<span class="link-go-text"><strong>Open the full report</strong>` +
-          `<span>Every check, the FoSCoS licence comparison, extracted label data and the packaging, plus you can keep chatting from there</span></span>` +
+          `<span class="link-go-text"><strong>${esc(tx('link.report','Open the full report'))}</strong>` +
+          `<span>${esc(tx('link.reportSub','Every check, the FoSCoS licence comparison, extracted label data and the packaging, plus you can keep chatting from there'))}</span></span>` +
           `<span class="link-go-arrow">&rarr;</span>` +
         `</a>` +
       `</div>`
@@ -775,7 +799,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
       say(`<em>I could not get an answer just then, ${esc(err.message || 'the providers are all busy')}.</em> Ask again in a moment.`);
     }
     setStatus('online');
-    composerEnabled(true, 'Ask me anything about this product…');
+    composerEnabled(true, tx('ph.ask','Ask me anything about this product...'));
     $('composerInput').focus();
   }
 
@@ -862,7 +886,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
 
     chatHistory = [];
     S.phase = 'chatting';
-    composerEnabled(true, 'Ask me anything about this medicine…');
+    composerEnabled(true, tx('ph.askMed','Ask me anything about this medicine...'));
 
     await says(
       `That is the label. I should be plain about what I am not: I check whether the pack carries what the law requires, ` +
@@ -871,9 +895,9 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     );
 
     chips([
-      { label: 'What is this medicine for?', run: () => routeAsChat(`What is ${info.genericName || info.productName} used for? Explain simply, based on the composition printed on this pack.`) },
-      { label: 'Side effects to know', run: () => routeAsChat('What are the common side effects and interactions I should know about for this medicine?') },
-      { label: 'How do I report this?', tone: 'ghost', run: () => offerComplaint() }
+      { label: tx('chip.medFor','What is this medicine for?'), run: () => routeAsChat(`What is ${info.genericName || info.productName} used for? Explain simply, based on the composition printed on this pack.`) },
+      { label: tx('chip.sideEffects','Side effects to know'), run: () => routeAsChat('What are the common side effects and interactions I should know about for this medicine?') },
+      { label: tx('chip.report','How do I report this?'), tone: 'ghost', run: () => offerComplaint() }
     ]);
   }
 
@@ -905,7 +929,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
       <button class="check-row check-${chk.status}" onclick="medDeepDive(${i})">
         <span class="check-mark">${chk.status === 'pass' ? '&#10003;' : chk.status === 'warn' ? '!' : '&times;'}</span>
         <span class="check-text">
-          <span class="check-label">${esc(chk.label)}</span>
+          <span class="check-label">${esc(lbl(chk.label))}</span>
           <span class="check-note">${esc(shortNote(chk))}</span>
         </span>
         <span class="check-chev">&rsaquo;</span>
@@ -924,7 +948,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
 
     youSaid(`Tell me more about: ${chk.label}`);
     say(
-      `<div class="deep-head">${esc(chk.label)}</div>` +
+      `<div class="deep-head">${esc(lbl(chk.label))}</div>` +
       `<p><span class="rule-tag">${esc(chk.rule)}</span></p>` +
       `<p>${esc(chk.why)}</p>` +
       `<p><strong>On this pack:</strong> ${esc(chk.details)}</p>` +
@@ -980,7 +1004,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
   async function medicineSummary(data) {
     const c = data.compliance;
     const rows = [];
-    c.checks.filter(x => x.status === 'fail').forEach(f => rows.push([f.label, 'Missing', 'bad']));
+    c.checks.filter(x => x.status === 'fail').forEach(f => rows.push([f.label, tx('sum.missing','Missing'), 'bad']));
     c.checks.filter(x => x.status === 'warn').forEach(w => rows.push([w.label, 'Unconfirmed', 'warn']));
     if (!rows.length) rows.push(['All mandatory particulars', 'Present', 'ok']);
 
@@ -995,14 +1019,14 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
                data.licence.present ? 'Printed, not verifiable from here' : 'Not printed',
                data.licence.present ? 'warn' : 'bad']);
 
-    await says(`Pulling it together.`);
+    await says(tx('sum.pulling','So, pulling it together.'));
     const headline = c.failCount
       ? `<strong>${c.failCount} mandatory particular${c.failCount === 1 ? '' : 's'} missing under the Drugs and Cosmetics Rules 1945.</strong> This is reportable to the State Drug Controller.`
       : `<strong>The label carries what the law requires.</strong>`;
 
     say(headline + `
       <table class="sum-table">
-        <thead><tr><th>What I checked</th><th>Where it stands</th></tr></thead>
+        <thead><tr><th>${esc(tx('sum.what','What I checked'))}</th><th>${esc(tx('sum.where','Where it stands'))}</th></tr></thead>
         <tbody>${rows.map(([a, b, t]) => `<tr><td>${esc(a)}</td><td><span class="sum-pill sum-${t}">${esc(b)}</span></td></tr>`).join('')}</tbody>
       </table>`);
     await sleep(300);
@@ -1098,7 +1122,7 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     closeHistoryDrawer();
     const h = scanHistory[i];
     if (!h) return;
-    divider('From your history');
+    divider(tx('divider.history','From your history'));
     say(`<strong>${esc(h.productName || 'Unknown product')}</strong>${h.brand ? ', ' + esc(h.brand) : ''}<br>
          <span class="msg-why">Scanned ${new Date(h.timestamp).toLocaleString()} &middot; ${h.overall === 'compliant' ? 'compliant' : 'had issues'}</span><br><br>
          Scan it again to ask questions about it, I only keep the summary, not the full label data.`);
@@ -1127,10 +1151,34 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     });
   }
 
-  window.onLangChange = function (code) {
+  window.onLangChange = async function (code) {
     if (!window.SafeByteVoice) return;
     SafeByteVoice.setLang(code);
     fillLanguagePickers();
+
+    // Translate the interface itself, not just what the model writes back.
+    // Hindi and Marathi are built in and swap instantly; the rest are
+    // translated once and cached, so only the first switch costs anything.
+    if (window.SafeByteI18N) {
+      const info = SafeByteVoice.langInfo;
+      let note = null;
+      const result = await SafeByteI18N.setLanguage(code, info.ai, state => {
+        if (state === 'translating') {
+          note = bubble('agent',
+            `<div class="step"><span class="spin"></span><span>Translating the interface into ${esc(info.native)}...</span></div>`,
+            'is-step');
+        }
+      });
+      if (note) note.remove();
+      if (result === 'failed') {
+        showToast('Could not translate the interface, staying in English', 'error');
+      }
+      // Re-apply placeholders the layer does not own
+      const el = $('composerInput');
+      if (el && !el.disabled && currentAnalysis) {
+        el.placeholder = tx('ph.ask', 'Ask me anything about this product...');
+      }
+    }
 
     const l = SafeByteVoice.langInfo;
     const el = $('composerInput');
@@ -1154,12 +1202,16 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     if (!window.SafeByteVoice) return;
     const on = !SafeByteVoice.speakReplies;
     SafeByteVoice.setSpeakReplies(on);
-    const btn = $('speakToggle');
-    if (btn) {
+    // There are two of these: one in the chat header, one on the landing page.
+    ['speakToggle', 'landingSpeak'].forEach(id => {
+      const btn = $(id);
+      if (!btn) return;
       btn.classList.toggle('on', on);
       btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      btn.title = on ? 'Stop reading answers aloud' : 'Read answers aloud';
-    }
+      btn.title = on
+        ? tx('tip.speakOff', 'Stop reading answers aloud')
+        : tx('tip.speak', 'Read answers aloud');
+    });
     if (on) {
       const l = SafeByteVoice.langInfo;
       SafeByteVoice.speak(
@@ -1175,19 +1227,27 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
     const btn = $('micBtn'), input = $('composerInput');
 
     if (!SafeByteVoice.canListen) {
-      showToast('Speech input needs Chrome, Edge or Safari', 'error');
+      showToast(tx('err.micUnsupported','Speech input needs Chrome, Edge or Safari'), 'error');
       return;
     }
     if (SafeByteVoice.listening) { SafeByteVoice.stopListening(); return; }
 
     const before = input ? input.placeholder : '';
     btn.classList.add('listening');
-    if (input) input.placeholder = 'Listening...';
+    if (input) input.placeholder = tx('ph.listening','Listening...');
 
     SafeByteVoice.listen(
       // final
       said => {
         if (!input) return;
+        // Someone who just spoke expects to be answered out loud. Turning the
+        // speaker on here means voice works the moment you use it, instead of
+        // only after finding a toggle you had no reason to look for.
+        if (!SafeByteVoice.speakReplies) {
+          SafeByteVoice.setSpeakReplies(true);
+          const sp = $('speakToggle');
+          if (sp) { sp.classList.add('on'); sp.setAttribute('aria-pressed', 'true'); }
+        }
         input.value = said;
         growComposer(input);
         // A question asked aloud should be answered without another tap.
@@ -1200,11 +1260,60 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
         btn.classList.remove('listening');
         if (input) input.placeholder = before;
         if (err === 'not-allowed' || err === 'service-not-allowed') {
-          showToast('Microphone blocked. Allow it in the address bar.', 'error');
+          showToast(tx('err.micBlocked','Microphone blocked. Allow it in the address bar.'), 'error');
         } else if (err === 'no-speech') {
-          showToast('I did not catch that', 'info');
+          showToast(tx('err.noSpeech','I did not catch that'), 'info');
         } else if (err === 'unsupported') {
           showToast('Speech input not supported in this browser', 'error');
+        }
+      }
+    );
+  };
+
+  /**
+   * The microphone on the landing page, before any thread exists.
+   *
+   * Someone who cannot read the label is exactly the person who should not
+   * have to find their way through an upload screen first. So: say "scan" and
+   * the camera opens; say anything else and the agent takes the question.
+   */
+  window.landingListen = function () {
+    if (!window.SafeByteVoice) return;
+    const btn = $('landingMic');
+
+    if (!SafeByteVoice.canListen) {
+      showToast(tx('err.micUnsupported', 'Speech input needs Chrome, Edge or Safari'), 'error');
+      return;
+    }
+    if (SafeByteVoice.listening) { SafeByteVoice.stopListening(); return; }
+
+    // Someone speaking to it expects to be spoken back to.
+    if (!SafeByteVoice.speakReplies) window.toggleSpeakReplies();
+
+    if (btn) btn.classList.add('listening');
+    showToast(tx('toast.listening', 'Listening, say what you need'), 'info');
+
+    SafeByteVoice.listen(
+      said => {
+        // Any language: a spoken instruction to scan should just open the camera.
+        if (/\b(scan|upload|photo|picture|camera|check|start|शुरू|स्कैन|फोटो|तपास|फोटो|படம்|ஸ்கேன்)\b/i.test(said)) {
+          const inp = $('chatFileInput');
+          if (inp) inp.click();
+          return;
+        }
+        // Anything else is a question, and questions belong in the thread.
+        startConversation();
+        const el = $('composerInput');
+        if (el) { el.value = said; growComposer(el); }
+        setTimeout(() => onComposerSubmit(), 160);
+      },
+      null,
+      err => {
+        if (btn) btn.classList.remove('listening');
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          showToast(tx('err.micBlocked', 'Microphone blocked. Allow it in the address bar.'), 'error');
+        } else if (err === 'no-speech') {
+          showToast(tx('err.noSpeech', 'I did not catch that'), 'info');
         }
       }
     );
@@ -1249,14 +1358,34 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
   function boot() {
     wireLandingDrop();
     fillLanguagePickers();
-    const btn = $('speakToggle');
-    if (btn && window.SafeByteVoice && SafeByteVoice.speakReplies) {
-      btn.classList.add('on');
-      btn.setAttribute('aria-pressed', 'true');
+    // Someone who chose Marathi last time should not land on English.
+    if (window.SafeByteI18N && window.SafeByteVoice) {
+      const c0 = SafeByteVoice.lang;
+      if (c0 !== 'en-IN') {
+        SafeByteI18N.setLanguage(c0, SafeByteVoice.langInfo.ai);
+      }
     }
+    if (window.SafeByteVoice && SafeByteVoice.speakReplies) {
+      ['speakToggle', 'landingSpeak'].forEach(id => {
+        const b = $(id);
+        if (b) { b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); }
+      });
+    }
+
     if (window.SafeByteVoice && !SafeByteVoice.canListen) {
-      const m = $('micBtn');
-      if (m) m.style.display = 'none';
+      // Do not leave a button there that cannot do anything. Say why instead.
+      ['micBtn', 'landingMic'].forEach(id => {
+        const m = $(id);
+        if (m) m.style.display = 'none';
+      });
+      const note = $('landingVoiceNote');
+      if (note) note.hidden = false;
+    }
+    if (window.SafeByteVoice && !SafeByteVoice.canSpeak) {
+      ['speakToggle', 'landingSpeak'].forEach(id => {
+        const b = $(id);
+        if (b) b.style.display = 'none';
+      });
     }
   }
 

@@ -24,16 +24,34 @@
   <section class="landing" id="landing">
     <div class="landing-inner">
       <div class="landing-lang">
-        <label for="langSelectLanding">Language</label>
+        <label for="langSelectLanding" data-i18n="lang.label">Language</label>
         <select class="lang-select" id="langSelectLanding" onchange="onLangChange(this.value)" aria-label="Language"></select>
+
+        <span class="landing-voice" id="landingVoice">
+          <button type="button" class="icon-btn" id="landingMic" onclick="landingListen()"
+                  data-i18n-title="tip.landingMic" title="Speak to it">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="11" rx="3"/>
+              <path d="M5 10v1a7 7 0 0014 0v-1M12 18v4M8 22h8"/>
+            </svg>
+          </button>
+          <button type="button" class="icon-btn" id="landingSpeak" onclick="toggleSpeakReplies()"
+                  data-i18n-title="tip.speak" title="Read answers aloud" aria-pressed="false">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 5L6 9H3v6h3l5 4V5z"/>
+              <path class="wave" d="M16 9a4 4 0 010 6M19 6.5a7.5 7.5 0 010 11" opacity="0.35"/>
+            </svg>
+          </button>
+        </span>
       </div>
+      <p class="landing-voice-note" id="landingVoiceNote" hidden data-i18n="voice.noRecog">Speaking to it needs Chrome, Edge or Safari. Everything else works here.</p>
 
       <span class="hero-badge">
-        AI Food Packaging Compliance
+        <span data-i18n="badge">AI Food Packaging Compliance</span>
       </span>
 
       <h1>SafeByte <span class="gradient-text">AI Agent</span></h1>
-      <p class="landing-sub">What is SafeByte? An AI agent that looks at a photo of any food package and instantly verifies its government-approved license.</p>
+      <p class="landing-sub" data-i18n="tagline">What is SafeByte? An AI agent that looks at a photo of any food package and instantly verifies its government-approved license.</p>
 
       <div class="upload-card">
         <div class="upload-zone" id="landingZone"
@@ -45,11 +63,11 @@
               <path d="M21 15.5l-5-5L5 21"/>
             </svg>
           </div>
-          <h3>Upload package image</h3>
-          <p>or drag &amp; drop here, JPG, PNG</p>
+          <h3 data-i18n="upload.title">Upload package image</h3>
+          <p data-i18n="upload.hint">or drag &amp; drop here, JPG, PNG</p>
         </div>
 
-        <div class="upload-divider"><span>or</span></div>
+        <div class="upload-divider"><span data-i18n="upload.or">or</span></div>
 
         <div class="camera-section">
           <button class="btn btn-camera" onclick="document.getElementById('landingCamera').click()">
@@ -57,14 +75,14 @@
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
-            Capture with Camera
+            <span data-i18n="upload.camera">Capture with Camera</span>
           </button>
           <input type="file" id="landingCamera" accept="image/*" capture="environment"
                  style="display:none" onchange="onChatFilePicked(event)" />
         </div>
       </div>
 
-      <button class="hero-history-link" onclick="openHistoryDrawer()">&darr;&nbsp; See your history</button>
+      <button class="hero-history-link" onclick="openHistoryDrawer()">&darr;&nbsp; <span data-i18n="landing.history">See your history</span></button>
     </div>
   </section>
 
@@ -78,24 +96,24 @@
           </svg>
         </span>
         <span class="chat-top-name">SafeByte</span>
-        <span class="chat-top-status" id="agentStatus">ready</span>
+        <span class="chat-top-status" id="agentStatus" data-i18n="status.online">online</span>
       </div>
       <div class="chat-top-actions">
         <select class="lang-select" id="langSelect" onchange="onLangChange(this.value)"
                 title="Language for speaking and replies" aria-label="Language"></select>
         <button class="icon-btn" id="speakToggle" onclick="toggleSpeakReplies()"
-                title="Read answers aloud" aria-pressed="false">
+                data-i18n-title="tip.speak" title="Read answers aloud" aria-pressed="false">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 5L6 9H2v6h4l5 4V5z"/>
             <path class="wave" d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/>
           </svg>
         </button>
-        <button class="icon-btn" onclick="openHistoryDrawer()" title="Past scans">
+        <button class="icon-btn" onclick="openHistoryDrawer()" data-i18n-title="tip.history" title="Past scans">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
           </svg>
         </button>
-        <button class="icon-btn" onclick="startNewScan()" title="New scan">
+        <button class="icon-btn" onclick="startNewScan()" data-i18n-title="tip.newscan" title="New scan">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -108,19 +126,19 @@
     <div class="quick-replies" id="quickReplies"></div>
 
     <form class="composer" id="composer" onsubmit="event.preventDefault(); onComposerSubmit();">
-      <button type="button" class="composer-attach" onclick="document.getElementById('chatFileInput').click()" title="Add a package photo">
+      <button type="button" class="composer-attach" onclick="document.getElementById('chatFileInput').click()" data-i18n-title="tip.attach" title="Add a package photo">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15.5l-5-5L5 21"/>
         </svg>
       </button>
       <input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="onChatFilePicked(event)" />
-      <button type="button" class="composer-mic" id="micBtn" onclick="toggleMic()" title="Speak instead of typing">
+      <button type="button" class="composer-mic" id="micBtn" onclick="toggleMic()" data-i18n-title="tip.mic" title="Speak instead of typing">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="2" width="6" height="11" rx="3"/>
           <path d="M5 10v1a7 7 0 0014 0v-1M12 18v4M8 22h8"/>
         </svg>
       </button>
-      <textarea id="composerInput" rows="1" placeholder="Send a photo of a food package to begin&hellip;"
+      <textarea id="composerInput" rows="1" data-i18n-ph="ph.start" placeholder="Send a photo of a food package to begin..."
                 onkeydown="onComposerKey(event)" oninput="growComposer(this)"></textarea>
       <button type="submit" class="composer-send" id="composerSend" title="Send">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -134,7 +152,7 @@
   <div class="drawer-scrim" id="historyScrim" onclick="closeHistoryDrawer()"></div>
   <aside class="drawer" id="historyDrawer" aria-hidden="true">
     <div class="drawer-head">
-      <h2>Past scans</h2>
+      <h2 data-i18n="drawer.title">Past scans</h2>
       <button class="icon-btn" onclick="closeHistoryDrawer()" title="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
           <path d="M18 6L6 18M6 6l12 12"/>
@@ -245,7 +263,7 @@
           <canvas id="photoCanvas" style="display:none;"></canvas>
         </div>
 
-        <button class="hero-history-link" onclick="switchTab('history')">&darr;&nbsp; See your history</button>
+        <button class="hero-history-link" onclick="switchTab('history')">&darr;&nbsp; <span data-i18n="landing.history">See your history</span></button>
 
       <div class="preview-card" id="previewCard" style="display:none;">
           <div class="preview-header">
@@ -496,6 +514,7 @@
   <div class="toast" id="toast"></div>
   <script src="engine.js"></script>
   <script src="store.js"></script>
+  <script src="i18n.js"></script>
   <script src="voice.js"></script>
   <script src="medicine.js"></script>
   <script src="chat-agent.js"></script>
