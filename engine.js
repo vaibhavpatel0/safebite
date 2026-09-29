@@ -28,6 +28,17 @@ const IMAGE_JPEG_QUALITY = 0.85;
 let lastProvider = null;
 let lastProviderMs = null;
 
+// When the page is served from a real host, a localhost fallback is not just
+// useless, it is harmful: it fails with "Failed to fetch" and that message
+// overwrites the real error the server already returned. Only try localhost
+// when we actually are local.
+function isLocalDev() {
+  if (typeof window === 'undefined') return true;
+  const h = window.location.hostname;
+  return !window.location.protocol.startsWith('http') ||
+         h === 'localhost' || h === '127.0.0.1' || h === '' || h === '[::1]';
+}
+
 // ── State ──────────────────────────────────────────────────────
 let currentImage = null;          // primary image (kept for compatibility)
 let currentImageFile = null;
@@ -329,8 +340,8 @@ const fssaiService = {
       endpoints.push('/api/verify/foscos');
       endpoints.push('/api/verify/fssai');
     }
-    endpoints.push('http://localhost:3000/api/verify/foscos');
-    endpoints.push('http://localhost:3000/api/verify/fssai');
+    if (isLocalDev()) endpoints.push('http://localhost:3000/api/verify/foscos');
+    if (isLocalDev()) endpoints.push('http://localhost:3000/api/verify/fssai');
 
     let lastError = null;
 
@@ -1006,7 +1017,7 @@ Return ONLY the JSON object. No markdown, no explanation.`;
   const endpoints = [];
   const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
   if (isHttp) endpoints.push('/api/extract/auto');
-  endpoints.push('http://localhost:3000/api/extract/auto');
+  if (isLocalDev()) endpoints.push('http://localhost:3000/api/extract/auto');
 
   let lastError = null;
   for (const url of endpoints) {
@@ -1198,7 +1209,7 @@ Use clean HTML for display:
   const endpoints = [];
   const isHttp = typeof window !== 'undefined' && window.location.protocol.startsWith('http');
   if (isHttp) endpoints.push('/api/chat/auto');
-  endpoints.push('http://localhost:3000/api/chat/auto');
+  if (isLocalDev()) endpoints.push('http://localhost:3000/api/chat/auto');
 
   let lastError = null;
   for (const url of endpoints) {
@@ -1535,7 +1546,7 @@ async function checkProviderStatus() {
   if (typeof window !== 'undefined' && window.location.protocol.startsWith('http')) {
     urls.push('/api/providers/status');
   }
-  urls.push('http://localhost:3000/api/providers/status');
+  if (isLocalDev()) urls.push('http://localhost:3000/api/providers/status');
 
   for (const url of urls) {
     try {
