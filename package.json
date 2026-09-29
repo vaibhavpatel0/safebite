@@ -1,0 +1,16 @@
+{
+  "name": "safebyte",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An AI agent that reads Indian packaged food and medicine labels, checks them against the law, and verifies licences against government registries.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check-vision": "node check-vision.js",
+    "fix-models": "node fix-models.js",
+    "test": "node --check server.js && node --check chat-agent.js && node --check engine.js && node --check medicine.js && node --check store.js && node --check voice.js && echo \"All source files parse.\""
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {},
+  "license": "MIT"
+}

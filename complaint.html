@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeByte — File an FSSAI Complaint</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body.cmp-mode { height: 100dvh; overflow: hidden; background: var(--bg); }
+    .cmp-shell { display: flex; flex-direction: column; height: 100dvh; }
+
+    .cmp-top {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      padding: 12px 20px;
+      background: rgba(246,244,239,0.94);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .cmp-top h1 { font-family: var(--serif); font-weight: 400; font-size: 21px; color: var(--text); }
+    .cmp-top-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .cmp-top-r { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* Two halves, one tab. Left is yours, right is theirs. */
+    .cmp-split { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+
+    .cmp-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .cmp-pane + .cmp-pane { border-left: 1px solid var(--border); }
+    .cmp-pane-head {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 16px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+    }
+    .cmp-pane-head strong { font-size: 13px; color: var(--text); font-weight: 650; }
+    .cmp-pane-head span { font-size: 11.5px; color: var(--text3); }
+    .cmp-pane-body { flex: 1 1 auto; overflow-y: auto; }
+
+    .cmp-left-body { padding: 18px 18px 60px; }
+
+    .cmp-hint {
+      background: var(--green-tint);
+      border-radius: 11px;
+      padding: 13px 15px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+    .cmp-hint strong { color: var(--green); }
+
+    .cmp-field { margin-bottom: 13px; }
+    .cmp-field-top {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin-bottom: 4px;
+    }
+    .cmp-field label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--text3); }
+    .copy-btn {
+      padding: 3px 10px; border-radius: 6px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text2); font-family: inherit; font-size: 11.5px; font-weight: 600;
+      cursor: pointer; transition: all 0.14s ease;
+    }
+    .copy-btn:hover { border-color: var(--green); color: var(--green); background: var(--green-tint); }
+    .copy-btn.copied { background: var(--green); border-color: var(--green); color: #fff; }
+
+    .cmp-field input, .cmp-field textarea {
+      width: 100%; padding: 9px 12px; border-radius: 9px;
+      font-family: inherit; font-size: 13.5px; line-height: 1.55; resize: vertical;
+    }
+    .cmp-field textarea { min-height: 80px; }
+    .cmp-field input[readonly] { background: var(--surface2) !important; }
+
+    .cmp-section {
+      font-family: var(--serif); font-weight: 400; font-size: 19px;
+      color: var(--text); margin: 24px 0 12px; padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .cmp-section:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+
+    .cmp-copy-all {
+      width: 100%; padding: 12px; margin-top: 8px;
+      background: var(--green); color: #fff; border: none; border-radius: 10px;
+      font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .cmp-copy-all:hover { background: #1B4A30; }
+
+    /* Right half: the government portal */
+    .cmp-frame-wrap { position: relative; flex: 1 1 auto; min-height: 0; background: #fff; }
+    #cmpFrame { width: 100%; height: 100%; border: none; display: block; }
+
+    .cmp-blocked {
+      position: absolute; inset: 0;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 40px 32px; background: var(--bg2);
+    }
+    .cmp-blocked.show { display: flex; }
+    .cmp-blocked h3 { font-family: var(--serif); font-weight: 400; font-size: 25px; margin-bottom: 12px; color: var(--text); }
+    .cmp-blocked p { font-size: 14.5px; line-height: 1.7; color: var(--text2); max-width: 420px; margin: 0 auto 10px; }
+    .cmp-blocked .cmp-open {
+      margin-top: 20px; padding: 13px 26px;
+      background: var(--green); color: #fff; border: none; border-radius: 10px;
+      font-family: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
+      text-decoration: none; display: inline-block;
+    }
+    .cmp-blocked .cmp-open:hover { background: #1B4A30; }
+    .cmp-plain {
+      display: block; margin-top: 14px; font-size: 13px;
+      color: var(--text3); text-decoration: underline; text-underline-offset: 3px;
+    }
+    .cmp-plain:hover { color: var(--green); }
+    .cmp-spin {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2.5px solid var(--border2); border-top-color: var(--green);
+      animation: spin 0.8s linear infinite;
+    }
+
+    @media (max-width: 900px) {
+      body.cmp-mode { overflow: auto; height: auto; }
+      .cmp-shell { height: auto; }
+      .cmp-split { grid-template-columns: 1fr; }
+      .cmp-pane + .cmp-pane { border-left: none; border-top: 1px solid var(--border); }
+      .cmp-pane-body { overflow: visible; }
+      .cmp-frame-wrap { height: 70vh; }
+    }
+  </style>
+</head>
+<body class="cmp-mode">
+
+  <div class="cmp-shell">
+    <header class="cmp-top">
+      <div class="cmp-top-l">
+        <svg width="23" height="23" viewBox="0 0 28 28" fill="none">
+          <path d="M14 2L24 7V14C24 19.5 19.5 24.5 14 26C8.5 24.5 4 19.5 4 14V7L14 2Z" fill="#235C3C"/>
+          <path d="M9.5 14l3 3 6-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1>File an FSSAI complaint</h1>
+      </div>
+      <div class="cmp-top-r">
+        <a class="rep-btn" href="report.html">Full report</a>
+        <a class="rep-btn" href="index.html">Back to chat</a>
+      </div>
+    </header>
+
+    <div class="cmp-split">
+      <!-- YOUR SIDE -->
+      <section class="cmp-pane">
+        <div class="cmp-pane-head">
+          <strong>Your complaint details</strong>
+          <span>copy each field across</span>
+        </div>
+        <div class="cmp-pane-body">
+          <div class="cmp-left-body" id="cmpLeft">
+            <div class="cmp-hint" id="cmpHint">Loading the scan&hellip;</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- THEIR SIDE -->
+      <section class="cmp-pane">
+        <div class="cmp-pane-head">
+          <strong>FoSCoS, official portal</strong>
+          <span id="cmpFrameStatus">loading&hellip;</span>
+        </div>
+        <div class="cmp-frame-wrap">
+          <iframe id="cmpFrame" title="FoSCoS complaint portal" referrerpolicy="no-referrer"></iframe>
+
+          <div class="cmp-blocked" id="cmpChecking">
+            <div class="cmp-spin"></div>
+            <p style="margin-top:16px;">Checking whether the portal allows embedding&hellip;</p>
+          </div>
+
+          <div class="cmp-blocked" id="cmpBlocked">
+            <h3>FoSCoS will not open inside another page</h3>
+            <p id="cmpReason">The portal sends a header forbidding it. Nearly every government site does, and no website can override it, it is enforced by your browser, for your protection.</p>
+            <p>So use two windows instead. This opens FoSCoS snapped to the right of your screen; put this tab on the left and copy straight across.</p>
+            <button class="cmp-open" id="cmpOpenSide">Open FoSCoS beside this window</button>
+            <a class="cmp-plain" id="cmpOpenPlain" href="https://foscos.fssai.gov.in/misleading-report" target="_blank" rel="noopener">or open it in an ordinary new tab</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="resultsContainer" style="display:none"></div>
+
+  <script src="store.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    const PORTAL = 'https://foscos.fssai.gov.in/misleading-report';
+    const data = SafeByteStore.load();
+
+    // The portal pane is set up further down and must work whether or not a
+    // scan exists - only the left half depends on having one.
+    if (!data) {
+      $('cmpLeft').innerHTML =
+        '<div class="cmp-hint">No scan found. <a href="index.html" style="color:var(--green);font-weight:600;">Scan a package first</a> and the complaint will be written for you.</div>';
+      setUpPortalPane();
+      return;
+    }
+
+    const info = data.info || {};
+    const comp = data.compliance || {};
+    const fssai = data.fssaiResult || {};
+    const licNo = (fssai.licenceNumber && fssai.licenceNumber.normalized) || info.fssaiLicNo || '';
+
+    // ---- what the complaint should actually say ---------------------------
+    const violations = (comp.checks || [])
+      .filter(c => c.status === 'fail')
+      .map(c => `${c.label} — ${c.details || 'not present on the pack'}`);
+
+    const description =
+`Complaint regarding non-compliant food package labelling.
+
+PRODUCT
+Name       : ${info.productName || 'Not stated on pack'}
+Brand      : ${info.brand || 'Not stated'}
+Net qty    : ${info.netQuantity || 'NOT DECLARED'}
+MRP        : ${info.mrp || 'NOT DECLARED'}
+Batch/Lot  : ${info.batchNo || 'NOT DECLARED'}
+
+MANUFACTURER / MARKETER
+${info.manufacturer || 'Not stated on pack'}
+${info.manufacturerAddress || ''}
+FSSAI licence on pack: ${licNo || 'NOT PRINTED'}
+FoSCoS status: ${fssai.overallResult ? String(fssai.overallResult).replace(/_/g, ' ') : 'not verified'}
+
+NON-COMPLIANCE OBSERVED (${violations.length})
+${violations.length ? violations.map((v, i) => `${i + 1}. ${v}`).join('\n') : 'None recorded.'}
+
+These are mandatory declarations under the Legal Metrology (Packaged Commodities) Rules, 2011 and the Food Safety and Standards (Labelling and Display) Regulations, 2020. Their absence from the retail pack is requested to be investigated.
+
+Reported via SafeByte label audit on ${new Date(data.timestamp || Date.now()).toLocaleString()}.`;
+
+    // ---- the form -----------------------------------------------------------
+    const fields = [
+      { id: 'lic',   label: 'FSSAI licence number',    value: licNo, ro: true },
+      { id: 'prod',  label: 'Product name',            value: info.productName || '', ro: true },
+      { id: 'brand', label: 'Brand name',              value: info.brand || '', ro: true },
+      { id: 'owner', label: 'Brand owner / marketer',  value: info.manufacturer || '', ro: true },
+      { id: 'addr',  label: 'Company address',         value: info.manufacturerAddress || '', ro: true }
+    ];
+
+    const yours = [
+      { id: 'cname',  label: 'Your name',     value: '', ph: 'Full name' },
+      { id: 'cphone', label: 'Mobile',        value: '', ph: '10-digit mobile' },
+      { id: 'cmail',  label: 'Email',         value: '', ph: 'you@example.com' },
+      { id: 'cstate', label: 'State',         value: '', ph: 'e.g. Maharashtra' },
+      { id: 'cdist',  label: 'District/City', value: '', ph: 'e.g. Nagpur' },
+      { id: 'cpin',   label: 'Pincode',       value: '', ph: '6 digits' }
+    ];
+
+    const fieldHtml = f => `
+      <div class="cmp-field">
+        <div class="cmp-field-top">
+          <label for="${f.id}">${esc(f.label)}</label>
+          <button class="copy-btn" data-for="${f.id}">Copy</button>
+        </div>
+        <input id="${f.id}" value="${esc(f.value)}" placeholder="${esc(f.ph || '')}" ${f.ro ? 'readonly' : ''} />
+      </div>`;
+
+    $('cmpLeft').innerHTML = `
+      <div class="cmp-hint">
+        <strong>What a complaint needs.</strong> Identify the product and its licence, state exactly which mandatory
+        declarations are missing, and give your own contact details so the authority can respond. Everything from the
+        left is already written for you, copy each field across, add your details, and submit on the right.
+      </div>
+
+      <div class="cmp-section">The product complained of</div>
+      ${fields.map(fieldHtml).join('')}
+
+      <div class="cmp-field">
+        <div class="cmp-field-top">
+          <label for="desc">Complaint description</label>
+          <button class="copy-btn" data-for="desc">Copy</button>
+        </div>
+        <textarea id="desc" style="min-height:260px;font-family:ui-monospace,Menlo,monospace;font-size:12px;">${esc(description)}</textarea>
+      </div>
+
+      <div class="cmp-section">Your details</div>
+      ${yours.map(fieldHtml).join('')}
+
+      <button class="cmp-copy-all" id="copyAll">Copy the whole complaint</button>
+    `;
+
+    $('cmpHint') && null;
+
+    // ---- copy buttons -------------------------------------------------------
+    function flash(btn) {
+      const was = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = was; btn.classList.remove('copied'); }, 1300);
+    }
+
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('.copy-btn');
+      if (!btn) return;
+      const el = $(btn.dataset.for);
+      if (!el) return;
+      el.select();
+      navigator.clipboard.writeText(el.value).then(() => flash(btn)).catch(() => {
+        try { document.execCommand('copy'); flash(btn); } catch (_) {}
+      });
+    });
+
+    $('copyAll').onclick = function () {
+      const all = fields.concat(yours)
+        .map(f => `${f.label}: ${$(f.id).value}`)
+        .join('\n') + '\n\n' + $('desc').value;
+      navigator.clipboard.writeText(all).then(() => {
+        this.textContent = 'Copied to clipboard';
+        setTimeout(() => { this.textContent = 'Copy the whole complaint'; }, 1600);
+      });
+    };
+
+    setUpPortalPane();
+
+    // ---- does the portal allow embedding? -----------------------------------
+    // Asking the browser is useless: Chrome fires a normal `load` event even
+    // when a site refuses to be framed, so the page reports success over a
+    // blank error screen. The server reads the actual headers instead.
+    function setUpPortalPane() {
+    const frame = $('cmpFrame');
+
+    function showBlocked(reason) {
+      $('cmpChecking').classList.remove('show');
+      $('cmpBlocked').classList.add('show');
+      $('cmpFrameStatus').textContent = 'must open separately';
+      if (reason) {
+        $('cmpReason').textContent =
+          'The portal sends ' + reason + ', which forbids it. Nearly every government site does, and no website can override it \u2014 your browser enforces it.';
+      }
+    }
+
+    function showFramed() {
+      $('cmpChecking').classList.remove('show');
+      $('cmpBlocked').classList.remove('show');
+      $('cmpFrameStatus').textContent = 'live';
+      frame.src = PORTAL;
+    }
+
+    $('cmpChecking').classList.add('show');
+    fetch('/api/can-frame?url=' + encodeURIComponent(PORTAL))
+      .then(r => r.json())
+      .then(d => { if (d && d.allowed) showFramed(); else showBlocked(d && d.reason); })
+      .catch(() => showBlocked(null));
+
+    // Snap the portal to the right half of the screen so the two windows sit
+    // side by side - as close to one tab as the browser will allow.
+    $('cmpOpenSide').onclick = function () {
+      const w = Math.floor(screen.availWidth / 2);
+      const h2 = screen.availHeight;
+      const left = screen.availLeft != null ? screen.availLeft + w : w;
+      const top = screen.availTop || 0;
+      const win = window.open(PORTAL, 'foscos',
+        `width=${w},height=${h2},left=${left},top=${top},noopener`);
+      if (!win) {
+        this.textContent = 'Allow pop-ups, then try again';
+        setTimeout(() => { this.textContent = 'Open FoSCoS beside this window'; }, 2600);
+        return;
+      }
+      // Tuck ourselves into the left half so the pair actually line up.
+      try { window.moveTo(screen.availLeft || 0, top); window.resizeTo(w, h2); } catch (e) {}
+    };
+    }
+  })();
+  </script>
+</body>
+</html>

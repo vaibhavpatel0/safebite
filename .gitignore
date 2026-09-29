@@ -1,0 +1,23 @@
+# Secrets. Never commit these.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Logs and scratch
+*.log
+npm-debug.log*
+server.log
+
+# Backups left by the model-repair scripts
+*.bak
+*.bak-*
+*.backup-*

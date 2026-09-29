@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeByte AI Agent – FSSAI Package Compliance</title>
+  <meta name="description" content="SafeByte is an AI agent that reads a photo of any food package and instantly verifies its government-approved FSSAI license, checks Legal Metrology compliance, and files complaints automatically." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="chat-mode">
+
+  <!-- ==================================================================
+       SafeByte - conversational shell
+       The whole app is one thread. The legacy tab markup below is kept in
+       the DOM but hidden, so the existing engine (extraction, compliance,
+       FoSCoS verification, report rendering) keeps finding its elements.
+       =================================================================== -->
+
+
+  <!-- Landing: the page people arrive on. The conversation does not exist
+       until a photo does. -->
+  <section class="landing" id="landing">
+    <div class="landing-inner">
+      <div class="landing-lang">
+        <label for="langSelectLanding">Language</label>
+        <select class="lang-select" id="langSelectLanding" onchange="onLangChange(this.value)" aria-label="Language"></select>
+      </div>
+
+      <span class="hero-badge">
+        AI Food Packaging Compliance
+      </span>
+
+      <h1>SafeByte <span class="gradient-text">AI Agent</span></h1>
+      <p class="landing-sub">What is SafeByte? An AI agent that looks at a photo of any food package and instantly verifies its government-approved license.</p>
+
+      <div class="upload-card">
+        <div class="upload-zone" id="landingZone"
+             onclick="document.getElementById('chatFileInput').click()">
+          <div class="upload-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+              <circle cx="8.5" cy="8.5" r="1.6"/>
+              <path d="M21 15.5l-5-5L5 21"/>
+            </svg>
+          </div>
+          <h3>Upload package image</h3>
+          <p>or drag &amp; drop here, JPG, PNG</p>
+        </div>
+
+        <div class="upload-divider"><span>or</span></div>
+
+        <div class="camera-section">
+          <button class="btn btn-camera" onclick="document.getElementById('landingCamera').click()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Capture with Camera
+          </button>
+          <input type="file" id="landingCamera" accept="image/*" capture="environment"
+                 style="display:none" onchange="onChatFilePicked(event)" />
+        </div>
+      </div>
+
+      <button class="hero-history-link" onclick="openHistoryDrawer()">&darr;&nbsp; See your history</button>
+    </div>
+  </section>
+
+  <div class="app" id="chatApp" hidden>
+    <header class="chat-top">
+      <div class="chat-top-brand">
+        <span class="chat-top-mark" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+            <path d="M14 2L24 7V14C24 19.5 19.5 24.5 14 26C8.5 24.5 4 19.5 4 14V7L14 2Z" fill="#235C3C"/>
+            <path d="M9.5 14l3 3 6-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="chat-top-name">SafeByte</span>
+        <span class="chat-top-status" id="agentStatus">ready</span>
+      </div>
+      <div class="chat-top-actions">
+        <select class="lang-select" id="langSelect" onchange="onLangChange(this.value)"
+                title="Language for speaking and replies" aria-label="Language"></select>
+        <button class="icon-btn" id="speakToggle" onclick="toggleSpeakReplies()"
+                title="Read answers aloud" aria-pressed="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+            <path class="wave" d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/>
+          </svg>
+        </button>
+        <button class="icon-btn" onclick="openHistoryDrawer()" title="Past scans">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+          </svg>
+        </button>
+        <button class="icon-btn" onclick="startNewScan()" title="New scan">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="thread" id="thread"></div>
+
+    <div class="quick-replies" id="quickReplies"></div>
+
+    <form class="composer" id="composer" onsubmit="event.preventDefault(); onComposerSubmit();">
+      <button type="button" class="composer-attach" onclick="document.getElementById('chatFileInput').click()" title="Add a package photo">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15.5l-5-5L5 21"/>
+        </svg>
+      </button>
+      <input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="onChatFilePicked(event)" />
+      <button type="button" class="composer-mic" id="micBtn" onclick="toggleMic()" title="Speak instead of typing">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10v1a7 7 0 0014 0v-1M12 18v4M8 22h8"/>
+        </svg>
+      </button>
+      <textarea id="composerInput" rows="1" placeholder="Send a photo of a food package to begin&hellip;"
+                onkeydown="onComposerKey(event)" oninput="growComposer(this)"></textarea>
+      <button type="submit" class="composer-send" id="composerSend" title="Send">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+
+  <!-- History drawer -->
+  <div class="drawer-scrim" id="historyScrim" onclick="closeHistoryDrawer()"></div>
+  <aside class="drawer" id="historyDrawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Past scans</h2>
+      <button class="icon-btn" onclick="closeHistoryDrawer()" title="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawerHistory"></div>
+  </aside>
+
+  <!-- Legacy engine DOM: hidden, but present so existing code still works -->
+  <div id="legacyRoot" style="display:none !important;" aria-hidden="true">
+  <header class="header" id="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <path d="M14 2L24 7V14C24 19.5 19.5 24.5 14 26C8.5 24.5 4 19.5 4 14V7L14 2Z" fill="#235C3C"/>
+            <path d="M10 14L13 17L18 11" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="logoGrad" x1="4" y1="2" x2="24" y2="26" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#00D4AA"/>
+                <stop offset="1" stop-color="#0080FF"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="logo-text">SafeByte</span>
+      </div>
+      <nav class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-tab="scan" onclick="switchTab('scan')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Scan
+        </button>
+        <button class="nav-tab" data-tab="results" onclick="switchTab('results')" id="resultsTab" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+          Results
+        </button>
+        <button class="nav-tab" data-tab="chat" onclick="switchTab('chat')" id="chatTab" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Ask AI
+        </button>
+        <button class="nav-tab" data-tab="history" onclick="switchTab('history')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          History
+        </button>
+      </nav>
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        <span>FSSAI Verified</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- SCAN TAB -->
+    <section class="tab-content active" id="tab-scan">
+      <div class="scan-hero">
+        <div class="scan-hero-text">
+          <span class="hero-badge">
+            AI Food Packaging Compliance
+          </span>
+          <h1>SafeByte <span class="gradient-text">AI Agent</span></h1>
+          <p>What is SafeByte? An AI agent that looks at a photo of any food package and instantly verifies its government-approved license.</p>
+        </div>
+      </div>
+
+      <div class="upload-section">
+        <div class="upload-card" id="uploadCard">
+          <div class="upload-zone" id="uploadZone" onclick="triggerFileInput()" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+            <div class="upload-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2.5"/>
+                <circle cx="8.5" cy="8.5" r="1.6"/>
+                <path d="M21 15.5l-5-5L5 21"/>
+              </svg>
+            </div>
+            <h3>Upload package image</h3>
+            <p>or drag &amp; drop here, JPG, PNG</p>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)" style="display:none;" />
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="handleFileSelect(event)" style="display:none;" />
+
+          <div class="upload-divider"><span>or</span></div>
+
+          <div class="camera-section">
+            <button class="btn btn-camera" onclick="startCamera()" id="cameraBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              Capture with Camera
+            </button>
+          </div>
+
+          <div class="camera-view" id="cameraView" style="display:none;">
+            <video id="videoStream" autoplay playsinline></video>
+            <div class="camera-overlay">
+              <div class="camera-frame"></div>
+              <p class="camera-hint">Position the back label within the frame</p>
+            </div>
+            <div class="camera-controls">
+              <button class="btn btn-capture" onclick="capturePhoto()" id="captureBtn">
+                <span class="capture-circle"></span>
+              </button>
+              <button class="btn btn-secondary" onclick="stopCamera()">Cancel</button>
+            </div>
+          </div>
+          <canvas id="photoCanvas" style="display:none;"></canvas>
+        </div>
+
+        <button class="hero-history-link" onclick="switchTab('history')">&darr;&nbsp; See your history</button>
+
+      <div class="preview-card" id="previewCard" style="display:none;">
+          <div class="preview-header">
+            <h3>Package Captured</h3>
+            <button class="btn btn-ghost" onclick="resetScan()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Retake
+            </button>
+          </div>
+          <div class="preview-image-wrap">
+            <img id="previewImage" alt="Package preview" />
+          </div>
+          <button class="btn btn-analyze" id="analyzeBtn" onclick="analyzePackage()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+            Analyze Package with AI
+          </button>
+        </div>
+      </div>
+
+      <div class="checks-legend">
+        <h3 class="legend-title">Compliance Checks Performed</h3>
+        <div class="legend-grid">
+          <div class="legend-item"><span class="check-icon pass">✓</span>Manufacturer / Packer Details</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Net Quantity Declaration</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>MRP (Incl. of all taxes)</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Date of Mfg & Best Before</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Consumer Care Details</div>
+          <div class="legend-item"><span class="check-icon fssai">F</span>FSSAI Licence No. (Live Verify)</div>
+          <div class="legend-item"><span class="check-icon warn">!</span>Font Size & Readability</div>
+          <div class="legend-item"><span class="check-icon warn">!</span>Misleading / Non-std Claims</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Ingredients List</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Batch / Lot Number</div>
+          <div class="legend-item"><span class="check-icon pass">✓</span>Country of Origin</div>
+          <div class="legend-item"><span class="check-icon warn">!</span>Allergen Declaration</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESULTS TAB -->
+    <section class="tab-content" id="tab-results">
+      <div class="results-container" id="resultsContainer"></div>
+    </section>
+
+    <!-- CHAT TAB -->
+    <section class="tab-content" id="tab-chat">
+      <div class="chat-container">
+        <div class="chat-header-info" id="chatProductInfo"></div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-welcome">
+            <div class="chat-welcome-icon">🤖</div>
+            <h3>SafeByte Assistant</h3>
+            <p>Ask me anything about this food product — ingredients, nutrition, allergens, safety, and more!</p>
+            <div class="chat-suggestions" id="chatSuggestions">
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">Can a 10-year-old eat this?</button>
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">Is this good for diabetes?</button>
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">Is this healthy?</button>
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">Why is this unhealthy?</button>
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">What happens if I eat this every day?</button>
+              <button class="suggestion-chip" onclick="sendSuggestion(this)">Can I eat this when I have a cough?</button>
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <div class="chat-input-wrap">
+            <textarea id="chatInput" placeholder="Ask anything about this food product..." rows="1" onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="chat-send-btn" onclick="sendChatMessage()" id="chatSendBtn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
+          <p class="chat-disclaimer">AI analysis based on scanned package data. Not medical advice.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY TAB -->
+    <section class="tab-content" id="tab-history">
+      <div class="history-container">
+        <div class="history-header">
+          <h2>Scan History</h2>
+          <button class="btn btn-ghost btn-sm" onclick="clearHistory()">Clear All</button>
+        </div>
+        <div class="history-list" id="historyList">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <p>No scans yet. Start by scanning a food package!</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  </div>
+
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay" style="display:none;">
+    <div class="loading-card">
+      <div class="loading-steps" id="loadingSteps">
+        <div class="loading-step active" id="step1">
+          <div class="step-spinner"></div>
+          <span>Processing image with AI...</span>
+        </div>
+        <div class="loading-step" id="step2">
+          <div class="step-icon">🔍</div>
+          <span>Extracting package information...</span>
+        </div>
+        <div class="loading-step" id="step3">
+          <div class="step-icon">⚖️</div>
+          <span>Checking Legal Metrology compliance...</span>
+        </div>
+        <div class="loading-step" id="step4">
+          <div class="step-icon">🏛️</div>
+          <span>Verifying FSSAI license...</span>
+        </div>
+        <div class="loading-step" id="step5">
+          <div class="step-icon">📊</div>
+          <span>Generating compliance report...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Official FoSCoS Misleading Report Modal -->
+  <div class="modal-overlay" id="complaintModal" style="display:none;">
+    <div class="modal" style="max-width: 640px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div class="modal-icon warning">⚖️</div>
+        <div>
+          <h2>Official FoSCoS Misleading Report</h2>
+          <p style="font-size:12px;color:var(--text2);margin-top:2px;">
+            Target Portal: <a href="https://foscos.fssai.gov.in/misleading-report" target="_blank" style="color:var(--blue);text-decoration:underline;">foscos.fssai.gov.in/misleading-report</a>
+          </p>
+        </div>
+        <button class="modal-close" onclick="closeComplaintModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="fssai-notice" style="margin-bottom: 16px; padding: 12px 14px;">
+          <div class="notice-icon">ℹ️</div>
+          <div class="notice-body">
+            <strong>FSSAI Automated Misleading Report Filing</strong>
+            <p>SafeByte has extracted all mandatory product &amp; violation details. Click <strong>"🚀 Automatic Fill &amp; Open FoSCoS"</strong> to launch the official portal and auto-fill the complaint form.</p>
+          </div>
+        </div>
+
+        <form id="complaintForm" class="complaint-form" onsubmit="event.preventDefault(); submitComplaint();">
+          <!-- Product & Violation Details (Auto-filled by AI) -->
+          <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:16px;">
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px;">Package Details Extracted by AI</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>FSSAI Licence Number</label>
+                <input type="text" id="reportLicenseNo" readonly style="background:var(--surface3);font-family:monospace;font-weight:700;" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Product Name</label>
+                <input type="text" id="reportProductName" readonly style="background:var(--surface3);" />
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Brand Name</label>
+                <input type="text" id="reportBrandName" readonly style="background:var(--surface3);" />
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label>Brand Owner / Manufacturer</label>
+                <input type="text" id="reportBrandOwner" readonly style="background:var(--surface3);" />
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+              <label>Manufacturer Address</label>
+              <input type="text" id="reportCompanyAddress" readonly style="background:var(--surface3);font-size:12px;" />
+            </div>
+            <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+              <label>Violations Observed (FSSAI / Legal Metrology)</label>
+              <textarea id="reportViolations" rows="3" style="font-size:12px;"></textarea>
+            </div>
+            <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+              <label>Misleading Claim / Non-Compliance Allegation</label>
+              <textarea id="reportMisleadingClaim" rows="2" style="font-size:12px;"></textarea>
+            </div>
+          </div>
+
+          <!-- Complainant Contact Details -->
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px;">Complainant Details (FoSCoS Requirement)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+              <label>Full Name <span class="required">*</span></label>
+              <input type="text" id="complainantName" placeholder="Enter full name" required value="Vaibhav Patel" />
+            </div>
+            <div class="form-group">
+              <label>10-Digit Mobile <span class="required">*</span></label>
+              <input type="tel" id="complainantPhone" placeholder="98XXXXXXXX" pattern="[0-9]{10}" maxlength="10" required value="9876543210" />
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+              <label>Email Address <span class="required">*</span></label>
+              <input type="email" id="complainantEmail" placeholder="your@email.com" required value="consumer.report@gmail.com" />
+            </div>
+            <div class="form-group">
+              <label>State <span class="required">*</span></label>
+              <select id="complainantState" required>
+                <option value="Maharashtra" selected>Maharashtra</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Gujarat">Gujarat</option>
+                <option value="Karnataka">Karnataka</option>
+                <option value="Uttar Pradesh">Uttar Pradesh</option>
+                <option value="Tamil Nadu">Tamil Nadu</option>
+                <option value="West Bengal">West Bengal</option>
+                <option value="Other">Other State</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="form-group">
+              <label>Pincode</label>
+              <input type="text" id="complainantPincode" placeholder="6-digit Pincode" maxlength="6" value="440001" />
+            </div>
+            <div class="form-group">
+              <label>City / District</label>
+              <input type="text" id="complainantDistrict" placeholder="City or District" value="Nagpur" />
+            </div>
+          </div>
+
+          <div class="form-consent" style="margin-top:10px;">
+            <input type="checkbox" id="consentCheck" checked required />
+            <label for="consentCheck">I verify that the above information and package image are authentic and authorise filing this complaint under FoSCoS Misleading Advertisement / Packaging regulations.</label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;">
+        <div style="display:flex;gap:6px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="closeComplaintModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="downloadFoscosDossier()">📥 Download Dossier</button>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-primary" onclick="autoFillFoscosMisleadingReport()">
+            🚀 Automatic Fill &amp; Open FoSCoS
+          </button>
+          <button type="button" class="btn btn-danger" onclick="submitComplaint()">
+            Record Complaint
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast"></div>
+  <script src="engine.js"></script>
+  <script src="store.js"></script>
+  <script src="voice.js"></script>
+  <script src="medicine.js"></script>
+  <script src="chat-agent.js"></script>
+</body>
+</html>
