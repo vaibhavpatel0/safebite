@@ -1,0 +1,31 @@
+# Render blueprint.
+#
+# SafeByte is a plain long-running Node HTTP server, so it needs a host that
+# runs a process rather than serverless functions. This file tells Render
+# exactly how to start it, so nothing has to be configured by hand.
+#
+# Every credential is marked `sync: false`, which means Render asks you for the
+# value once in its dashboard and stores it there. No key is ever written into
+# this repository.
+
+services:
+  - type: web
+    name: safebyte
+    runtime: node
+    plan: free
+    region: singapore          # closest to India; change if you prefer
+    branch: main
+    buildCommand: ""           # zero dependencies, nothing to build
+    startCommand: node server.js
+    healthCheckPath: /index.html
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: VERIFICO_API_KEY
+        sync: false
