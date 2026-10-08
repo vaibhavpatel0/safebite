@@ -1720,3 +1720,55 @@ body.chat-mode:not(.in-conversation) { overflow-y: auto; height: auto; min-heigh
 @media (prefers-reduced-motion: reduce) {
   .composer-mic.listening { animation: none; }
 }
+
+/* -- Settings: Verifico usage ---------------------------------------------- */
+.settings-body { padding: 18px 20px 28px; }
+.set-section + .set-section { margin-top: 26px; }
+.set-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.set-section h3 { font-size: 15px; font-weight: 650; color: var(--text); }
+.set-refresh {
+  border: none; background: none; padding: 2px 0; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--green);
+}
+.set-refresh:hover { text-decoration: underline; }
+.set-intro { margin: 6px 0 16px; font-size: 13px; line-height: 1.6; color: var(--text2); }
+
+.set-big { display: flex; align-items: baseline; gap: 8px; }
+.set-big strong {
+  font-family: var(--serif); font-weight: 400; font-size: 44px; line-height: 1;
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.set-big span { font-size: 14px; color: var(--text2); }
+
+.set-bar {
+  height: 8px; margin: 12px 0 6px; border-radius: 99px;
+  background: var(--surface2); overflow: hidden;
+}
+.set-bar i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+.set-bar.is-low i { background: #B7791F; }
+.set-bar.is-out i { background: var(--red); }
+.set-bar-cap { font-size: 12px; color: var(--text3); font-variant-numeric: tabular-nums; }
+
+.set-status {
+  display: inline-block; margin-top: 14px; padding: 4px 10px; border-radius: 99px;
+  font-size: 12.5px; font-weight: 600;
+}
+.set-status.ok   { background: var(--green-tint); color: var(--green); }
+.set-status.warn { background: #FBF3E4; color: #8A5A12; }
+.set-status.bad  { background: #FBEDEC; color: var(--red); }
+
+.set-rows { margin-top: 16px; border-top: 1px solid var(--border); }
+.set-row {
+  display: flex; justify-content: space-between; gap: 14px;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13.5px;
+}
+.set-row span { color: var(--text2); }
+.set-row b { font-weight: 600; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+
+.set-note { margin-top: 14px; font-size: 12.5px; line-height: 1.6; color: var(--text3); }
+.set-link {
+  display: inline-block; margin-top: 12px; font-size: 13.5px; font-weight: 600;
+  color: var(--green); text-decoration: none;
+}
+.set-link:hover { text-decoration: underline; }
+.set-error { font-size: 13.5px; color: var(--red); line-height: 1.6; }

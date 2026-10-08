@@ -1096,6 +1096,114 @@ Under 220 words total. Plain words, no jargon unless you explain it in the same 
   };
 
   // ------------------------------------------------------------- history
+  // ------------------------------------------------------------- settings
+  // Verifico is the one part of the licence check that costs money, and it
+  // has no API that reports the balance. So the server counts what it spends
+  // and this panel shows that count, labelled as a count, with the dashboard
+  // one tap away for the real figure.
+  window.openSettings = function () {
+    $('settingsDrawer').classList.add('open');
+    $('settingsDrawer').setAttribute('aria-hidden', 'false');
+    $('settingsScrim').classList.add('open');
+    loadVerificoUsage();
+  };
+
+  window.closeSettings = function () {
+    $('settingsDrawer').classList.remove('open');
+    $('settingsDrawer').setAttribute('aria-hidden', 'true');
+    $('settingsScrim').classList.remove('open');
+  };
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && $('settingsDrawer') && $('settingsDrawer').classList.contains('open')) {
+      closeSettings();
+    }
+  });
+
+  function whenText(iso) {
+    if (!iso) return tx('set.never', 'Never');
+    const d = new Date(iso);
+    if (isNaN(d)) return '-';
+    const lang = (window.SafeByteVoice && SafeByteVoice.lang) || 'en-IN';
+    try { return d.toLocaleString(lang, { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch (e) { return d.toLocaleString(); }
+  }
+
+  window.loadVerificoUsage = async function () {
+    const box = $('verificoUsage');
+    if (!box) return;
+    box.innerHTML = `<p class="set-intro">${esc(tx('set.loading', 'Loading...'))}</p>`;
+
+    const proto = window.location.protocol;
+    const url = (proto === 'http:' || proto === 'https:')
+      ? '/api/verifico/usage'
+      : 'http://localhost:3000/api/verifico/usage';
+
+    let u;
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      u = await r.json();
+    } catch (e) {
+      box.innerHTML = `<p class="set-error">${esc(tx('set.loadFail', 'Could not load usage from the server.'))}</p>`;
+      return;
+    }
+
+    const limit = u.creditLimit || 0;
+    // When Verifico itself says the account is empty, the bar is full whatever we counted.
+    const pct = u.confirmedByVerifico ? 100 : limit ? Math.min(100, Math.round((u.used / limit) * 100)) : 0;
+    const out = u.outOfCredits;
+    const low = !out && limit && u.remaining <= Math.max(2, Math.ceil(limit * 0.2));
+
+    let status, tone;
+    if (!u.keySet)                 { status = tx('set.keyNo', 'No key set, lookups are off'); tone = 'bad'; }
+    else if (u.confirmedByVerifico){ status = tx('set.statusOut', 'Out of credits'); tone = 'bad'; }
+    else if (out)                  { status = tx('set.statusOutGuess', 'Probably out of credits'); tone = 'bad'; }
+    else if (low)                  { status = tx('set.statusLow', 'Running low'); tone = 'warn'; }
+    else                           { status = tx('set.statusOk', 'Working'); tone = 'ok'; }
+
+    const lastResult = {
+      verified:       tx('set.rVerified', 'Verified'),
+      not_found:      tx('set.rNotFound', 'Not found'),
+      out_of_credits: tx('set.statusOut', 'Out of credits'),
+      error:          tx('set.rError', 'Failed')
+    }[u.lastResult] || '';
+
+    const rupees = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+    box.innerHTML = `
+      <div class="set-big">
+        <strong>${u.remaining}</strong>
+        <span>${esc(tx('set.leftOf', 'lookups left of {limit}').replace('{limit}', limit))}</span>
+      </div>
+      <div class="set-bar${out ? ' is-out' : low ? ' is-low' : ''}" role="progressbar"
+           aria-valuemin="0" aria-valuemax="${limit}" aria-valuenow="${u.used}">
+        <i style="width:${pct}%"></i>
+      </div>
+      <div class="set-bar-cap">${u.used} / ${limit} ${esc(tx('set.usedLower', 'used'))}</div>
+
+      <span class="set-status ${tone}">${esc(status)}</span>
+
+      <div class="set-rows">
+        <div class="set-row"><span>${esc(tx('set.used', 'Lookups used'))}</span><b>${u.used}</b></div>
+        <div class="set-row"><span>${esc(tx('set.notCharged', 'Not charged (not found or failed)'))}</span><b>${u.notCharged}</b></div>
+        <div class="set-row"><span>${esc(tx('set.price', 'Price after the free 10'))}</span><b>${rupees(u.pricePerLookupInr)}</b></div>
+        <div class="set-row"><span>${esc(tx('set.spent', 'Spent so far'))}</span><b>${rupees(u.spentInr)}</b></div>
+        <div class="set-row"><span>${esc(tx('set.last', 'Last lookup'))}</span><b>${esc(whenText(u.lastAt))}${lastResult ? ' &middot; ' + esc(lastResult) : ''}</b></div>
+        <div class="set-row"><span>${esc(tx('set.key', 'Verifico key'))}</span><b>${esc(u.keySet ? tx('set.keyYes', 'Set') : tx('set.keyNoShort', 'Not set'))}</b></div>
+      </div>
+
+      ${u.confirmedByVerifico && u.countedRemaining > 0
+        ? `<p class="set-note">${esc(tx('set.mismatch', 'Verifico refused for lack of credits, although this server had only counted part of them. Some lookups were made from somewhere else with the same key.'))}</p>` : ''}
+
+      ${u.lastError && (u.lastResult === 'out_of_credits' || u.lastResult === 'error')
+        ? `<p class="set-note"><b>${esc(tx('set.lastErr', 'Verifico said'))}:</b> ${esc(u.lastError)}</p>` : ''}
+
+      <p class="set-note">${esc(tx('set.since', 'Counted by this server since'))} ${esc(whenText(u.since))}.
+        ${esc(tx('set.note', 'Verifico has no way to ask for the balance, so this is the app\'s own count. Lookups made anywhere else are not in it, and the count restarts if the server is redeployed. The exact balance is on your Verifico dashboard.'))}</p>
+      <a class="set-link" href="${esc(u.dashboard)}" target="_blank" rel="noopener">${esc(tx('set.dashboard', 'Open Verifico dashboard'))} &rarr;</a>`;
+  };
+
   window.openHistoryDrawer = function () {
     const body = $('drawerHistory');
     if (!scanHistory || !scanHistory.length) {

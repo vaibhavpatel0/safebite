@@ -21,3 +21,6 @@ server.log
 *.bak
 *.bak-*
 *.backup-*
+
+# Local tally of Verifico lookups (the settings panel reads it)
+.verifico-usage.json

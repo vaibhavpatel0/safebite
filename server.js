@@ -53,6 +53,104 @@ const VERIFICO_API_KEY = process.env.VERIFICO_API_KEY || '';
 const VERIFICO_API_HOST = 'api.theverifico.com';
 const VERIFICO_API_PATH = '/api/v1/verify/fssai';
 
+// == Verifico usage =============================================================
+// Verifico sells lookups (10 free, then paid per verification) and offers no
+// API for asking how many are left. So this server counts what it spends and
+// reports that on the settings panel. It is a tally, not Verifico's own
+// balance: lookups made from another copy of the app, or before the counter
+// started, are not in it. The true number is always on the Verifico dashboard.
+//
+// VERIFICO_CREDIT_LIMIT  how many lookups your account has (10 on the free trial;
+//                        raise it when you buy more)
+// VERIFICO_PRICE_INR     what one lookup costs you after the free ones
+const VERIFICO_CREDIT_LIMIT = Math.max(0, parseInt(process.env.VERIFICO_CREDIT_LIMIT || '10', 10) || 0);
+const VERIFICO_PRICE_INR = Math.max(0, parseFloat(process.env.VERIFICO_PRICE_INR || '2') || 0);
+const VERIFICO_DASHBOARD = 'https://www.theverifico.com/dashboard';
+const VERIFICO_USAGE_FILE = path.join(__dirname, '.verifico-usage.json');
+
+const verificoUsage = (function load() {
+  const blank = {
+    since: new Date().toISOString(),
+    charged: 0,          // successful verifications, the only kind Verifico bills
+    notCharged: 0,       // not found / errors, which Verifico says it does not bill
+    lastAt: null,
+    lastResult: null,    // 'verified' | 'not_found' | 'out_of_credits' | 'error'
+    lastError: null,
+    outOfCreditsAt: null
+  };
+  try {
+    const saved = JSON.parse(fs.readFileSync(VERIFICO_USAGE_FILE, 'utf8'));
+    return Object.assign(blank, saved);
+  } catch (e) { return blank; }
+})();
+
+function saveVerificoUsage() {
+  // Best effort. On a host with a throwaway disk (Render's free tier) this
+  // resets on every deploy, and the panel says so via `since`.
+  fs.writeFile(VERIFICO_USAGE_FILE, JSON.stringify(verificoUsage, null, 2), () => {});
+}
+
+/** Did Verifico refuse because the account has run out? */
+function isOutOfCredits(statusCode, body) {
+  if (statusCode === 402) return true;
+  const m = String((body && (body.message || body.error || body.detail)) || '').toLowerCase();
+  return /credit|balance|insufficient|quota|limit exceeded|recharge|top.?up|payment/.test(m);
+}
+
+function recordVerifico(statusCode, body, err) {
+  verificoUsage.lastAt = new Date().toISOString();
+  if (err) {
+    verificoUsage.notCharged++;
+    verificoUsage.lastResult = 'error';
+    verificoUsage.lastError = String(err.message || err).slice(0, 200);
+  } else if (body && body.verification_data) {
+    verificoUsage.charged++;
+    verificoUsage.lastResult = 'verified';
+    verificoUsage.lastError = null;
+    verificoUsage.outOfCreditsAt = null;   // a lookup went through, so there were credits
+  } else if (isOutOfCredits(statusCode, body)) {
+    verificoUsage.notCharged++;
+    verificoUsage.lastResult = 'out_of_credits';
+    verificoUsage.lastError = String((body && (body.message || body.error)) || 'HTTP ' + statusCode).slice(0, 200);
+    verificoUsage.outOfCreditsAt = verificoUsage.lastAt;
+  } else if (statusCode >= 400 && statusCode !== 404) {
+    // A wrong key, a server fault, a blocked network: a failure, not "not found".
+    verificoUsage.notCharged++;
+    verificoUsage.lastResult = 'error';
+    verificoUsage.lastError = String((body && (body.message || body.error)) || 'HTTP ' + statusCode).slice(0, 200);
+  } else {
+    verificoUsage.notCharged++;
+    verificoUsage.lastResult = 'not_found';
+    verificoUsage.lastError = null;
+  }
+  saveVerificoUsage();
+}
+
+function verificoUsageReport() {
+  const used = verificoUsage.charged;
+  const counted = Math.max(0, VERIFICO_CREDIT_LIMIT - used);
+  // If Verifico itself refused for lack of credits, that beats our tally:
+  // the account was spent from somewhere this server did not see.
+  const confirmedOut = !!verificoUsage.outOfCreditsAt;
+  return {
+    keySet: !!VERIFICO_API_KEY,
+    creditLimit: VERIFICO_CREDIT_LIMIT,
+    used,
+    remaining: confirmedOut ? 0 : counted,
+    countedRemaining: counted,
+    notCharged: verificoUsage.notCharged,
+    pricePerLookupInr: VERIFICO_PRICE_INR,
+    spentInr: Math.max(0, used - 10) * VERIFICO_PRICE_INR,   // first 10 are the free trial
+    outOfCredits: confirmedOut || (VERIFICO_CREDIT_LIMIT > 0 && counted === 0),
+    confirmedByVerifico: confirmedOut,
+    lastAt: verificoUsage.lastAt,
+    lastResult: verificoUsage.lastResult,
+    lastError: verificoUsage.lastError,
+    since: verificoUsage.since,
+    dashboard: VERIFICO_DASHBOARD
+  };
+}
+
 // == Multi-Provider AI Configuration (Auto-Fallback Chain) =====================
 // Keys are read from the environment first, so you can keep them out of source:
 //   GROQ_API_KEY=... GEMINI_API_KEY=... MISTRAL_API_KEY=... OPENROUTER_API_KEY_GLOBAL=... node server.js
@@ -617,7 +715,16 @@ const server = http.createServer(async (req, res) => {
       try {
         // 1. Check Official FoSCoS Government Gateway
         console.log(`[FoSCoS] Querying official government gateway for license: ${licNo}`);
-        const foscosResult = await queryFoscosGateway(licNo);
+        // If the government gateway is down or unreachable, that is not the end
+        // of the check: the fallbacks below still have to run. Letting this
+        // throw sent every lookup straight to a 500, so Verifico was never asked.
+        let foscosResult;
+        try {
+          foscosResult = await queryFoscosGateway(licNo);
+        } catch (gwErr) {
+          console.warn(`[FoSCoS] Gateway unreachable (${gwErr.message}), trying fallbacks`);
+          foscosResult = { found: false, message: 'FoSCoS gateway unreachable: ' + gwErr.message };
+        }
 
         if (foscosResult.found) {
           console.log(`[FoSCoS] Match found in official registry: ${foscosResult.company_name}`);
@@ -665,9 +772,29 @@ const server = http.createServer(async (req, res) => {
         }
 
         // If not found in FoSCoS gateway, try Verifico API as fallback
+        // No key, no call: otherwise every scan waits on a request that can only fail.
+        if (!VERIFICO_API_KEY) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: false,
+            source: 'FoSCoS / Verifico Gateway',
+            message: foscosResult.message || 'Licence not found in FoSCoS registry',
+            verificoError: 'VERIFICO_API_KEY is not set'
+          }));
+          return;
+        }
+
         console.log(`[Verifico] Checking Verifico API for license: ${licNo}`);
-        const apiKey = req.headers['x-api-key'] || parsedBody.apiKey;
-        const verificoResult = await queryVerificoAPI(licNo, apiKey);
+        let verificoResult;
+        try {
+          // The server's own key only. A key sent by the browser would let any
+          // visitor spend someone else's credits, or ours be counted against theirs.
+          verificoResult = await queryVerificoAPI(licNo, VERIFICO_API_KEY);
+          recordVerifico(verificoResult.statusCode, verificoResult.body, null);
+        } catch (e) {
+          recordVerifico(0, null, e);
+          throw e;
+        }
 
         if (verificoResult.body && verificoResult.body.verification_data) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -981,6 +1108,13 @@ const server = http.createServer(async (req, res) => {
   // key and a wrong key look identical from outside, and the provider errors
   // ("Missing Authentication header", "unregistered callers") are easy to
   // mistake for a bad key when they actually mean an empty one.
+  // Settings panel: what Verifico lookups have cost so far. Never the key.
+  if (req.url === '/api/verifico/usage' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(verificoUsageReport(), null, 2));
+    return;
+  }
+
   if (req.url === '/api/config-check' && req.method === 'GET') {
     const report = [
       ['GROQ_API_KEY', GROQ_API_KEY],
